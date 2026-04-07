@@ -2,6 +2,7 @@ local component = require("component")
 local filesystem = require("filesystem")
 local io = require("io")
 local shell = require("shell")
+local _ARGS = {...}
 
 local DEST = "/home/DronePursuit"
 
@@ -36,9 +37,8 @@ local function fail(label) print2("  ✗  " .. label, C.RED) end
 local function info(label) print2("  ·  " .. label, C.DIM) end
 
 local function findSource()
-  local args = shell.parse(...)
-  if args[1] and filesystem.isDirectory(args[1]) then
-    return args[1]
+  if _ARGS[1] and filesystem.isDirectory(_ARGS[1]) then
+    return _ARGS[1]
   end
   local cwd = shell.getWorkingDirectory()
   if filesystem.exists(cwd .. "/DronePursuit.lua") then
