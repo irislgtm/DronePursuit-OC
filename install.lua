@@ -86,7 +86,8 @@ local DIRS = {
 }
 
 local function writeLauncher()
-  local f = io.open("/usr/bin/dronepursuit", "w")
+  filesystem.makeDirectory("/home/bin")
+  local f = io.open("/home/bin/dronepursuit", "w")
   if not f then return false end
   f:write('require("shell").execute("/home/DronePursuit/DronePursuit.lua")\n')
   f:close()
@@ -128,7 +129,7 @@ local function main()
 
   heading("Creating launcher")
   if writeLauncher() then
-    ok("/usr/bin/dronepursuit  (run anywhere with: dronepursuit)")
+    ok("/home/bin/dronepursuit  (run anywhere with: dronepursuit)")
   else
     info("Could not write launcher -- run manually: " .. DEST .. "/DronePursuit.lua")
   end

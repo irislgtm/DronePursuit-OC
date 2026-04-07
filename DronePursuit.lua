@@ -1,3 +1,5 @@
+package.path = "/home/DronePursuit/lib/?.lua;" .. package.path
+
 local component = require("component")
 local computer = require("computer")
 local event = require("event")
