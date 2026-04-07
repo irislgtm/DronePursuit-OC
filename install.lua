@@ -1,18 +1,18 @@
 local component = require("component")
 local filesystem = require("filesystem")
-local io = require("io")
-local shell = require("shell")
-local _ARGS = {...}
+local internet   = require("internet")
+local io         = require("io")
 
+local RAW  = "https://raw.githubusercontent.com/irislgtm/DronePursuit-OC/main"
 local DEST = "/home/DronePursuit"
 
 local C = {
-  ACCENT   = 0x0A84FF,
-  GREEN    = 0x30D158,
-  RED      = 0xFF453A,
-  YELLOW   = 0xFFD60A,
-  FG       = 0xFFFFFF,
-  DIM      = 0x8E8E93,
+  ACCENT = 0x0A84FF,
+  GREEN  = 0x30D158,
+  RED    = 0xFF453A,
+  YELLOW = 0xFFD60A,
+  FG     = 0xFFFFFF,
+  DIM    = 0x8E8E93,
 }
 
 local gpu = component.isAvailable("gpu") and component.gpu or nil
@@ -32,56 +32,51 @@ local function heading(title)
   print2("  " .. string.rep("─", #title), C.DIM)
 end
 
-local function ok(label)   print2("  ✓  " .. label, C.GREEN) end
-local function fail(label) print2("  ✗  " .. label, C.RED) end
-local function info(label) print2("  ·  " .. label, C.DIM) end
+local function ok(label)   print2("  \xe2\x9c\x93  " .. label, C.GREEN) end
+local function fail(label) print2("  \xe2\x9c\x97  " .. label, C.RED)   end
+local function info(label) print2("  \xc2\xb7  " .. label, C.DIM)       end
 
-local function findSource()
-  if _ARGS[1] and filesystem.isDirectory(_ARGS[1]) then
-    return _ARGS[1]
-  end
-  local cwd = shell.getWorkingDirectory()
-  if filesystem.exists(cwd .. "/DronePursuit.lua") then
-    return cwd
-  end
-  for addr in component.list("filesystem") do
-    local mnt = "/mnt/" .. addr:sub(1, 8)
-    if filesystem.isDirectory(mnt) and filesystem.exists(mnt .. "/DronePursuit.lua") then
-      return mnt
+local function fetch(path)
+  local url = RAW .. "/" .. path
+  local ok2, handle = pcall(internet.request, url)
+  if not ok2 then return nil, "request error" end
+  local chunks = {}
+  local success, err = pcall(function()
+    for chunk in handle do
+      chunks[#chunks + 1] = chunk
     end
-  end
-  return nil
+  end)
+  if not success then return nil, tostring(err) end
+  local data = table.concat(chunks)
+  if #data == 0 then return nil, "empty response" end
+  return data
 end
 
 local function ensureDir(path)
   if not filesystem.isDirectory(path) then
-    local ok2, err = filesystem.makeDirectory(path)
-    if not ok2 then return false, err end
+    local res, err = filesystem.makeDirectory(path)
+    if not res then return false, err end
   end
   return true
 end
 
-local function copyFile(src, dst)
-  local f = io.open(src, "rb")
-  if not f then return false, "cannot open source" end
-  local data = f:read("*a")
+local function writeFile(dst, data)
+  local f = io.open(dst, "wb")
+  if not f then return false, "cannot open " .. dst end
+  f:write(data)
   f:close()
-  local g = io.open(dst, "wb")
-  if not g then return false, "cannot open dest" end
-  g:write(data)
-  g:close()
   return true
 end
 
 local FILES = {
-  { src = "DronePursuit.lua",    dst = DEST .. "/DronePursuit.lua" },
-  { src = "flash.lua",           dst = DEST .. "/flash.lua"        },
-  { src = "lib/config.lua",      dst = DEST .. "/lib/config.lua"   },
-  { src = "lib/ui.lua",          dst = DEST .. "/lib/ui.lua"       },
-  { src = "lib/net.lua",         dst = DEST .. "/lib/net.lua"      },
-  { src = "lib/fleet.lua",       dst = DEST .. "/lib/fleet.lua"    },
-  { src = "lib/pursuit.lua",     dst = DEST .. "/lib/pursuit.lua"  },
-  { src = "firmware/drone_fw.lua", dst = DEST .. "/firmware/drone_fw.lua" },
+  { path = "DronePursuit.lua",      dst = DEST .. "/DronePursuit.lua"         },
+  { path = "flash.lua",             dst = DEST .. "/flash.lua"                },
+  { path = "lib/config.lua",        dst = DEST .. "/lib/config.lua"           },
+  { path = "lib/ui.lua",            dst = DEST .. "/lib/ui.lua"               },
+  { path = "lib/net.lua",           dst = DEST .. "/lib/net.lua"              },
+  { path = "lib/fleet.lua",         dst = DEST .. "/lib/fleet.lua"            },
+  { path = "lib/pursuit.lua",       dst = DEST .. "/lib/pursuit.lua"          },
+  { path = "firmware/drone_fw.lua", dst = DEST .. "/firmware/drone_fw.lua"    },
 }
 
 local DIRS = {
@@ -91,8 +86,7 @@ local DIRS = {
 }
 
 local function writeLauncher()
-  local path = "/usr/bin/dronepursuit"
-  local f = io.open(path, "w")
+  local f = io.open("/usr/bin/dronepursuit", "w")
   if not f then return false end
   f:write('require("shell").execute("/home/DronePursuit/DronePursuit.lua")\n')
   f:close()
@@ -101,44 +95,33 @@ end
 
 local function main()
   print("")
-  print2("  ╭───────────────────────────────────────╮", C.DIM)
-  print2("  │      DronePursuit  Installer          │", C.FG)
-  print2("  ╰───────────────────────────────────────╯", C.DIM)
-
-  heading("Locating source files")
-  local src = findSource()
-  if not src then
-    fail("Source not found. Usage:")
-    info("  install.lua [/path/to/DronePursuit-OC]")
-    info("  Or place this script in the same folder as DronePursuit.lua")
-    info("  Or insert the floppy disk containing the files")
-    return false
-  end
-  ok("Source: " .. src)
+  print2("  \xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae", C.DIM)
+  print2("  \xe2\x94\x82      DronePursuit  Network Installer      \xe2\x94\x82", C.FG)
+  print2("  \xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf", C.DIM)
+  info("Source: " .. RAW)
 
   heading("Creating directories")
   for _, dir in ipairs(DIRS) do
-    local success, err = ensureDir(dir)
-    if success then ok(dir)
-    else fail(dir .. " — " .. tostring(err)) return false end
+    local res, err = ensureDir(dir)
+    if res then ok(dir)
+    else fail(dir .. " -- " .. tostring(err)) return false end
   end
 
-  heading("Copying files")
-  local copied = 0
+  heading("Downloading files")
   local errors = 0
   for _, entry in ipairs(FILES) do
-    local srcPath = src .. "/" .. entry.src
-    if filesystem.exists(srcPath) then
-      local success, err = copyFile(srcPath, entry.dst)
-      if success then
-        ok(entry.dst)
-        copied = copied + 1
+    io.write("  \xe2\x80\xa6  " .. entry.path .. " ")
+    local data, err = fetch(entry.path)
+    if data then
+      local res2, err2 = writeFile(entry.dst, data)
+      if res2 then
+        print2("[ok]", C.GREEN)
       else
-        fail(entry.dst .. " — " .. tostring(err))
+        print2("[write error: " .. tostring(err2) .. "]", C.RED)
         errors = errors + 1
       end
     else
-      fail("Missing: " .. entry.src)
+      print2("[fetch error: " .. tostring(err) .. "]", C.RED)
       errors = errors + 1
     end
   end
@@ -147,7 +130,7 @@ local function main()
   if writeLauncher() then
     ok("/usr/bin/dronepursuit  (run anywhere with: dronepursuit)")
   else
-    info("Could not write /usr/bin/dronepursuit  (run manually instead)")
+    info("Could not write launcher -- run manually: " .. DEST .. "/DronePursuit.lua")
   end
 
   heading("Configuring firmware")
@@ -159,20 +142,19 @@ local function main()
     ok("Base coords saved: " .. coords)
     info("Run flash.lua to burn firmware to each drone EEPROM.")
   else
-    info("Skipped — you can set base coords later in Settings (View 5).")
+    info("Skipped -- set base coords later in Settings (View 5).")
   end
 
   print2("")
   if errors == 0 then
-    print2("  ╭───────────────────────────────────────╮", C.GREEN)
-    print2("  │        Installation complete!          │", C.GREEN)
-    print2("  ╰───────────────────────────────────────╯", C.GREEN)
+    print2("  \xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae", C.GREEN)
+    print2("  \xe2\x94\x82        Installation complete!              \xe2\x94\x82", C.GREEN)
+    print2("  \xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf", C.GREEN)
     print2("")
     print2("  Start now:    dronepursuit", C.FG)
     print2("  Flash drone:  " .. DEST .. "/flash.lua", C.DIM)
   else
-    print2("  Installation finished with " .. errors .. " error(s).", C.YELLOW)
-    print2("  Check missing files above and retry.", C.DIM)
+    print2("  Finished with " .. errors .. " error(s). Check output above.", C.YELLOW)
   end
   print2("")
   return errors == 0
