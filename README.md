@@ -1,4 +1,4 @@
-# DronePursuit — Setup & Operations Guide
+# DronePursuit -Setup & Operations Guide
 
 ## Hardware Requirements
 
